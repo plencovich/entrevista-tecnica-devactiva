@@ -70,6 +70,15 @@ Valores permitidos:
 
 Los emails se normalizan a minúsculas y los passwords se almacenan mediante el hashing nativo de Laravel.
 
+El autor de un artículo siempre es el usuario autenticado que lo crea y no puede modificarse desde la API. Todo artículo se crea con al menos una categoría. El slug se deriva del título, se regenera cuando el título cambia y resuelve colisiones con sufijos incrementales (`mi-articulo`, `mi-articulo-2`, ...).
+
+La publicación mantiene estas invariantes:
+
+- Un artículo `draft` siempre tiene `published_at: null`.
+- Un artículo `published` sin fecha explícita recibe la fecha actual.
+- Una fecha válida enviada al publicar se conserva.
+- Volver de `published` a `draft` limpia `published_at`.
+
 ## Autenticación
 
 La API usa tokens personales de Sanctum mediante este header:
@@ -126,14 +135,126 @@ curl --request POST http://localhost:8000/api/v1/auth/logout \
 
 El endpoint responde `204 No Content`. El token revocado no puede reutilizarse.
 
-## Endpoints
+## Roles y permisos
 
-| Método | Ruta | Autenticación | Respuesta |
+| Recurso / acción | Admin | Editor |
+| --- | --- | --- |
+| Usuarios | CRUD completo | Sin acceso administrativo |
+| Categorías: listar/ver | Sí | Sí |
+| Categorías: crear/editar/eliminar | Sí | No |
+| Artículos: listar | Todos | Sólo propios |
+| Artículos: ver | Todos | Sólo propios |
+| Artículos: crear | Sí, si está activo | Sí, si está activo |
+| Artículos: editar | Todos, si está activo | Sólo propios, si está activo |
+| Artículos: eliminar | Sí | No |
+
+Un editor nunca puede eliminar artículos, incluso si es el autor. Un usuario que conserva un token luego de ser desactivado puede consultar lo que su rol permite, pero recibe `403 Forbidden` al intentar crear o editar artículos.
+
+## API
+
+Todos los endpoints CRUD requieren `Authorization: Bearer <TOKEN>`. Las colecciones usan paginación nativa de Laravel, con 15 elementos por defecto. `per_page` permite solicitar entre 1 y 100 elementos.
+
+### Authentication
+
+| Método | Ruta | Permiso | Códigos principales |
 | --- | --- | --- | --- |
-| `POST` | `/api/v1/auth/login` | Pública | `200`, `401`, `403` o `422` |
-| `GET` | `/api/v1/auth/me` | Bearer Token | `200` o `401` |
-| `POST` | `/api/v1/auth/logout` | Bearer Token | `204` o `401` |
-| `GET` | `/up` | Pública | Healthcheck técnico |
+| `POST` | `/api/v1/auth/login` | Público; sólo usuarios activos obtienen token | `200`, `401`, `403`, `422` |
+| `GET` | `/api/v1/auth/me` | Usuario autenticado | `200`, `401` |
+| `POST` | `/api/v1/auth/logout` | Usuario autenticado | `204`, `401` |
+
+### Users
+
+| Método | Ruta | Permiso | Códigos principales |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/users` | Admin | `200`, `401`, `403` |
+| `POST` | `/api/v1/users` | Admin | `201`, `401`, `403`, `422` |
+| `GET` | `/api/v1/users/{user}` | Admin | `200`, `401`, `403`, `404` |
+| `PUT/PATCH` | `/api/v1/users/{user}` | Admin | `200`, `401`, `403`, `404`, `422` |
+| `DELETE` | `/api/v1/users/{user}` | Admin | `204`, `401`, `403`, `404`, `409` |
+
+Un usuario con artículos no puede eliminarse. La API responde `409 Conflict`; si puede eliminarse, sus tokens Sanctum también se eliminan.
+
+### Categories
+
+| Método | Ruta | Permiso | Códigos principales |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/categories` | Admin o editor | `200`, `401` |
+| `POST` | `/api/v1/categories` | Admin | `201`, `401`, `403`, `422` |
+| `GET` | `/api/v1/categories/{category}` | Admin o editor | `200`, `401`, `404` |
+| `PUT/PATCH` | `/api/v1/categories/{category}` | Admin | `200`, `401`, `403`, `404`, `422` |
+| `DELETE` | `/api/v1/categories/{category}` | Admin y sin artículos asociados | `204`, `401`, `403`, `404`, `409` |
+
+### Articles
+
+| Método | Ruta | Permiso | Códigos principales |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/articles` | Admin: todos; editor: sólo propios | `200`, `401` |
+| `POST` | `/api/v1/articles` | Admin o editor activo | `201`, `401`, `403`, `422` |
+| `GET` | `/api/v1/articles/{article}` | Admin o editor autor | `200`, `401`, `403`, `404` |
+| `PUT/PATCH` | `/api/v1/articles/{article}` | Admin activo o editor activo autor | `200`, `401`, `403`, `404`, `422` |
+| `DELETE` | `/api/v1/articles/{article}` | Admin | `204`, `401`, `403`, `404` |
+
+Los campos `author_id` y `slug` no forman parte del input admitido. `category_ids` es obligatorio al crear y, cuando se envía al editar, debe contener al menos un ID único y existente.
+
+## Ejemplos curl
+
+### Crear una categoría como admin
+
+```bash
+curl --request POST http://localhost:8000/api/v1/categories \
+  --header 'Accept: application/json' \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer <TOKEN>' \
+  --data '{"name":"Laravel","description":"Contenido sobre Laravel.","status":"active"}'
+```
+
+### Crear un artículo
+
+```bash
+curl --request POST http://localhost:8000/api/v1/articles \
+  --header 'Accept: application/json' \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer <TOKEN>' \
+  --data '{"title":"Introducción a Laravel 12","content":"Contenido...","status":"draft","published_at":null,"category_ids":[1]}'
+```
+
+### Listar artículos
+
+```bash
+curl 'http://localhost:8000/api/v1/articles?per_page=15' \
+  --header 'Accept: application/json' \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer <TOKEN>'
+```
+
+### Editar un artículo
+
+```bash
+curl --request PATCH http://localhost:8000/api/v1/articles/1 \
+  --header 'Accept: application/json' \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer <TOKEN>' \
+  --data '{"title":"Guía práctica de Laravel 12","status":"published"}'
+```
+
+### Eliminar un artículo como admin
+
+```bash
+curl --request DELETE http://localhost:8000/api/v1/articles/1 \
+  --header 'Accept: application/json' \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer <TOKEN>'
+```
+
+## Patrón de diseño
+
+`ArticleObserver` aplica Observer Pattern mediante los eventos Eloquent `creating` y `updating`. Mantiene las invariantes derivadas del artículo —slug automático y único, y consistencia entre `status` y `published_at`— en un único punto, independientemente del controller o de otro flujo que persista el modelo.
+
+## Respuestas de error
+
+La API usa `401` para falta de autenticación, `403` para permisos insuficientes, `404` para recursos inexistentes, `422` para validación y `409` cuando la integridad funcional impide eliminar un usuario o categoría. Los errores son JSON y no exponen SQL, constraints ni trazas internas.
+
+`GET /up` es el único endpoint técnico fuera de `/api/v1` y no requiere autenticación.
 
 ## Docker
 

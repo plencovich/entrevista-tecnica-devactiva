@@ -55,6 +55,13 @@ El patrón exigido por el challenge se elegirá durante la implementación funci
 
 La autenticación utiliza Laravel Sanctum mediante Bearer Tokens en los endpoints `/api/v1/auth/login`, `/api/v1/auth/me` y `/api/v1/auth/logout`. No instalar JWT ni configurar autenticación SPA/cookies.
 
+## Reglas permanentes del CMS
+
+- Centralizar en Policies el acceso administrativo, ownership y estado activo: el editor sólo consulta y edita artículos propios, nunca los elimina, y sólo usuarios activos crean o editan artículos.
+- La autoría y el slug son internos; ningún request de artículo acepta `author_id` ni `slug`. Todo artículo creado por la API requiere una o más categorías.
+- `ArticleObserver` mantiene el slug único y la consistencia entre `status` y `published_at`; no duplicar esas invariantes en controllers.
+- Una categoría asociada o un usuario autor no se eliminan; anticipar la restricción y responder `409` sin depender del error SQL.
+
 ## Testing
 
 Toda funcionalidad nueva debe evaluar Feature Tests, Unit Tests, integración y regresión. Favorecer Feature Tests para rutas, validación, autorización, persistencia y respuestas JSON. Usar Unit Tests sólo para lógica aislada que sea valioso probar sin framework.
