@@ -195,6 +195,18 @@ class ArticleCrudTest extends TestCase
         $this->assertSame('article-2', $secondEmpty->slug);
     }
 
+    public function test_slug_collisions_never_exceed_the_database_column_length(): void
+    {
+        $title = str_repeat('a', 255);
+        $first = Article::factory()->create(['title' => $title]);
+        $second = Article::factory()->create(['title' => $title]);
+
+        $this->assertSame(255, strlen($first->slug));
+        $this->assertLessThanOrEqual(255, strlen($second->slug));
+        $this->assertStringEndsWith('-2', $second->slug);
+        $this->assertNotSame($first->slug, $second->slug);
+    }
+
     public function test_title_update_regenerates_slug_and_excludes_current_article_from_collisions(): void
     {
         $admin = User::factory()->admin()->create();
@@ -238,6 +250,10 @@ class ArticleCrudTest extends TestCase
         $this->assertTrue(
             Article::query()->findOrFail($explicitId)->published_at->equalTo(Carbon::parse($explicitDate)),
         );
+
+        $this->patchJson("/api/v1/articles/{$draftId}", ['status' => 'published'])
+            ->assertOk();
+        $this->assertNotNull(Article::query()->findOrFail($draftId)->published_at);
 
         $this->patchJson("/api/v1/articles/{$automaticId}", ['status' => 'draft'])
             ->assertOk()->assertJsonPath('data.published_at', null);

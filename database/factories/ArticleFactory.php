@@ -16,7 +16,6 @@ class ArticleFactory extends Factory
     {
         return [
             'title' => fake()->sentence(6),
-            'slug' => fake()->unique()->slug(),
             'content' => fake()->paragraphs(5, true),
             'status' => ArticleStatus::Draft,
             'published_at' => null,

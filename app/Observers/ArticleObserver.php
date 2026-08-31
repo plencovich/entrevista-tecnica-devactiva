@@ -8,6 +8,8 @@ use Illuminate\Support\Str;
 
 class ArticleObserver
 {
+    private const MAX_SLUG_LENGTH = 255;
+
     public function creating(Article $article): void
     {
         $article->slug = $this->uniqueSlug($article);
@@ -39,6 +41,7 @@ class ArticleObserver
     private function uniqueSlug(Article $article): string
     {
         $baseSlug = Str::slug($article->title) ?: 'article';
+        $baseSlug = Str::limit($baseSlug, self::MAX_SLUG_LENGTH, '');
         $slug = $baseSlug;
         $suffix = 2;
 
@@ -46,7 +49,12 @@ class ArticleObserver
             ->where('slug', $slug)
             ->when($article->exists, fn ($query) => $query->whereKeyNot($article->getKey()))
             ->exists()) {
-            $slug = $baseSlug.'-'.$suffix;
+            $suffixText = '-'.$suffix;
+            $truncatedBase = rtrim(
+                Str::limit($baseSlug, self::MAX_SLUG_LENGTH - strlen($suffixText), ''),
+                '-',
+            );
+            $slug = $truncatedBase.$suffixText;
             $suffix++;
         }
 
