@@ -1,0 +1,25 @@
+name: entrevista-tecnica
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        APP_USER_ID: ${HOST_UID:-1000}
+        APP_GROUP_ID: ${HOST_GID:-1000}
+    image: entrevista-tecnica-app
+    init: true
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - .:/var/www/html
+      - composer_vendor:/var/www/html/vendor
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8000/up"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
+volumes:
+  composer_vendor:
