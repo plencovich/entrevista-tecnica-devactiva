@@ -1,14 +1,14 @@
 # CMS API
 
-API REST modular construida con Laravel 12 y preparada para ejecutarse localmente con Docker y SQLite.
+API REST modular construida con Laravel 12, Laravel Sanctum, Docker y SQLite.
 
 ## Stack
 
 - PHP 8.4.25.
 - Laravel 12.68.0.
+- Laravel Sanctum 4.3.3.
 - Composer 2.10.2.
 - SQLite 3.40.1.
-- Docker y Docker Compose.
 - PHPUnit 11.5.56.
 - Laravel Pint 1.30.5.
 
@@ -28,7 +28,10 @@ cd entrevista-tecnica
 cp .env.example .env
 docker compose up -d --build
 docker compose ps
+docker compose exec app php artisan migrate:fresh --seed
 ```
+
+`migrate:fresh` recrea la base de datos y elimina sus datos existentes. Para conservarlos, usar `docker compose exec app php artisan migrate --seed`.
 
 Durante el arranque, el contenedor `app` instala las dependencias Composer, crea `database/database.sqlite` si no existe, genera `APP_KEY` cuando está vacío y ejecuta las migrations pendientes.
 
@@ -36,7 +39,7 @@ La aplicación queda disponible en [http://localhost:8000](http://localhost:8000
 
 ## Configuración
 
-`.env.example` contiene valores seguros para desarrollo. Antes de iniciar, revisar especialmente:
+`.env.example` contiene valores seguros para desarrollo. Las variables principales son:
 
 - `APP_PORT`: puerto HTTP publicado; por defecto `8000`.
 - `HOST_UID` y `HOST_GID`: usuario y grupo del contenedor; por defecto `1000`.
@@ -51,33 +54,94 @@ docker compose build --no-cache app
 docker compose up -d
 ```
 
-## Docker
+## Modelo de datos
 
-Construir e iniciar:
+- `User 1 --- N Article`: cada artículo pertenece a un autor mediante `author_id`.
+- `Article N --- N Category`: `article_category` relaciona artículos y categorías sin ID artificial.
+
+`users.email` y `articles.slug` son únicos. El pivot impide duplicar una asociación artículo-categoría. Un usuario con artículos y una categoría asociada no pueden eliminarse por integridad referencial. Al eliminar un artículo, sus asociaciones del pivot se eliminan en cascada.
+
+Valores permitidos:
+
+- `user.role`: `admin`, `editor`.
+- `user.status`: `active`, `inactive`.
+- `article.status`: `draft`, `published`.
+- `category.status`: `active`, `inactive`.
+
+Los emails se normalizan a minúsculas y los passwords se almacenan mediante el hashing nativo de Laravel.
+
+## Autenticación
+
+La API usa tokens personales de Sanctum mediante este header:
+
+```text
+Authorization: Bearer <token>
+```
+
+Un usuario inactivo no puede obtener tokens nuevos. El logout revoca exclusivamente el token usado en esa petición.
+
+### Usuario local
+
+El seeder crea o actualiza un usuario destinado exclusivamente al entorno local:
+
+```text
+email: admin@example.com
+password: password
+```
+
+Ejecutar el seeder con:
+
+```bash
+docker compose exec app php artisan db:seed
+```
+
+Estas credenciales son de demostración y no deben utilizarse en producción.
+
+### Login
+
+```bash
+curl --request POST http://localhost:8000/api/v1/auth/login \
+  --header 'Accept: application/json' \
+  --header 'Content-Type: application/json' \
+  --data '{"email":"admin@example.com","password":"password"}'
+```
+
+Una autenticación correcta responde `200` con `token`, `token_type: Bearer` y los datos públicos del usuario. Credenciales inválidas responden `401`; un usuario inactivo responde `403`.
+
+### Usuario autenticado
+
+```bash
+curl http://localhost:8000/api/v1/auth/me \
+  --header 'Accept: application/json' \
+  --header 'Authorization: Bearer <token>'
+```
+
+### Logout
+
+```bash
+curl --request POST http://localhost:8000/api/v1/auth/logout \
+  --header 'Accept: application/json' \
+  --header 'Authorization: Bearer <token>'
+```
+
+El endpoint responde `204 No Content`. El token revocado no puede reutilizarse.
+
+## Endpoints
+
+| Método | Ruta | Autenticación | Respuesta |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/auth/login` | Pública | `200`, `401`, `403` o `422` |
+| `GET` | `/api/v1/auth/me` | Bearer Token | `200` o `401` |
+| `POST` | `/api/v1/auth/logout` | Bearer Token | `204` o `401` |
+| `GET` | `/up` | Pública | Healthcheck técnico |
+
+## Docker
 
 ```bash
 docker compose up -d --build
-```
-
-Consultar el estado y el healthcheck:
-
-```bash
 docker compose ps
-```
-
-Ver logs:
-
-```bash
-docker compose logs -f
 docker compose logs -f app
-```
-
-Detener, iniciar o reiniciar:
-
-```bash
-docker compose stop
-docker compose start
-docker compose restart
+docker compose restart app
 docker compose down
 ```
 
@@ -87,22 +151,12 @@ Abrir una shell:
 docker compose exec app bash
 ```
 
-Reconstruir el servicio cuando cambien `Dockerfile`, las extensiones PHP o `composer.lock`:
+Reconstruir el servicio cuando cambien `Dockerfile`, extensiones PHP o `composer.lock`:
 
 ```bash
 docker compose build app
 docker compose up -d app
 ```
-
-## API
-
-La URL base local para los endpoints funcionales es:
-
-```text
-http://localhost:8000/api/v1
-```
-
-La versión actual sólo prepara el enrutamiento y no expone todavía recursos funcionales del CMS. `/up` se mantiene como healthcheck técnico fuera del prefijo versionado.
 
 ## Artisan
 
@@ -111,23 +165,13 @@ docker compose exec app php artisan about
 docker compose exec app php artisan route:list
 docker compose exec app php artisan optimize:clear
 docker compose exec app php artisan migrate
+docker compose exec app php artisan migrate:status
 docker compose exec app php artisan db:seed
 ```
 
-## Composer
-
-```bash
-docker compose exec app composer install
-docker compose exec app composer require vendor/package
-docker compose exec app composer validate --strict
-docker compose exec app composer audit --no-interaction
-```
-
-Después de modificar `composer.lock`, reconstruir `app` para que una instalación nueva incluya las mismas dependencias.
-
 ## Testing
 
-La suite usa PHPUnit y SQLite en memoria:
+La suite usa PHPUnit y SQLite en memoria con foreign keys habilitadas:
 
 ```bash
 docker compose exec app composer test
@@ -137,24 +181,21 @@ docker compose exec app php artisan test --filter=NombreDelTest
 
 ## Calidad
 
-Laravel Pint verifica y formatea el código PHP:
-
 ```bash
 docker compose exec app ./vendor/bin/pint --test
-docker compose exec app ./vendor/bin/pint
+docker compose exec app composer validate --strict
+docker compose exec app composer audit --no-interaction
 ```
 
 No hay una herramienta de análisis estático configurada.
 
 ## Estructura
 
-- `app/`: código de aplicación, modelos, controllers y providers.
-- `bootstrap/`: arranque y configuración de rutas y excepciones.
-- `config/`: configuración consumida por Laravel.
+- `app/Enums`: roles y estados del dominio.
+- `app/Http`: controllers, Form Requests y API Resources.
+- `app/Models`: modelos y relaciones Eloquent.
+- `bootstrap/`: arranque, middleware, rutas y excepciones.
 - `database/`: migrations, factories, seeders y base SQLite local ignorada.
 - `routes/api.php`: rutas funcionales bajo `/api/v1`.
-- `routes/console.php`: comandos de consola.
-- `tests/Feature`: pruebas del comportamiento integrado de la API.
-- `tests/Unit`: pruebas de lógica PHP aislada cuando aporten valor.
-- `docker/`: scripts de inicio del contenedor.
+- `tests/Feature`: comportamiento integrado del dominio y la API.
 - `skills/`: instrucciones especializadas para agentes que trabajen en el proyecto.

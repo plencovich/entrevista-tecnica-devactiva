@@ -25,7 +25,7 @@ El proyecto es exclusivamente una API REST para un CMS modular. No existe interf
 - Excepciones: usar excepciones de dominio o HTTP únicamente cuando mejoren el manejo del error; devolver errores HTTP como JSON sin exponer detalles internos.
 - Tests: comportamiento de aplicación en `tests/Feature`; lógica PHP realmente aislada en `tests/Unit`.
 
-Antes de una tarea especializada, leer la skill relevante en `skills/`: `laravel-development`, `laravel-testing`, `laravel-database` o `docker-development`. Las reglas globales de este archivo prevalecen y las skills no amplían el alcance autorizado.
+Antes de una tarea especializada, leer la skill relevante en `skills/`: `laravel-development`, `laravel-testing`, `laravel-database`, `laravel-api` o `docker-development`. Las reglas globales de este archivo prevalecen y las skills no amplían el alcance autorizado.
 
 ## Reglas de implementación
 
@@ -53,7 +53,7 @@ El patrón exigido por el challenge se elegirá durante la implementación funci
 
 ## Autenticación
 
-La autenticación futura por Bearer Token se implementará con Laravel Sanctum. No instalar JWT ni incorporar el flujo hasta que una etapa funcional lo requiera.
+La autenticación utiliza Laravel Sanctum mediante Bearer Tokens en los endpoints `/api/v1/auth/login`, `/api/v1/auth/me` y `/api/v1/auth/logout`. No instalar JWT ni configurar autenticación SPA/cookies.
 
 ## Testing
 
