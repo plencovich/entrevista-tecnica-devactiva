@@ -1,4 +1,4 @@
-# CMS API
+# CMS Modular API
 
 API REST modular construida con Laravel 12, Laravel Sanctum, Docker y SQLite.
 
@@ -23,8 +23,8 @@ PHP y Composer se ejecutan dentro del contenedor; no es necesario instalarlos en
 ## Instalación
 
 ```bash
-git clone <repository-url>
-cd entrevista-tecnica
+git clone git@github.com:plencovich/entrevista-tecnica-devactiva.git
+cd entrevista-tecnica-devactiva
 cp .env.example .env
 docker compose up -d --build
 docker compose ps
@@ -137,16 +137,16 @@ El endpoint responde `204 No Content`. El token revocado no puede reutilizarse.
 
 ## Roles y permisos
 
-| Recurso / acción | Admin | Editor |
-| --- | --- | --- |
-| Usuarios | CRUD completo | Sin acceso administrativo |
-| Categorías: listar/ver | Sí | Sí |
-| Categorías: crear/editar/eliminar | Sí | No |
-| Artículos: listar | Todos | Sólo propios |
-| Artículos: ver | Todos | Sólo propios |
-| Artículos: crear | Sí, si está activo | Sí, si está activo |
-| Artículos: editar | Todos, si está activo | Sólo propios, si está activo |
-| Artículos: eliminar | Sí | No |
+| Recurso / acción                  | Admin                 | Editor                       |
+| --------------------------------- | --------------------- | ---------------------------- |
+| Usuarios                          | CRUD completo         | Sin acceso administrativo    |
+| Categorías: listar/ver            | Sí                    | Sí                           |
+| Categorías: crear/editar/eliminar | Sí                    | No                           |
+| Artículos: listar                 | Todos                 | Sólo propios                 |
+| Artículos: ver                    | Todos                 | Sólo propios                 |
+| Artículos: crear                  | Sí, si está activo    | Sí, si está activo           |
+| Artículos: editar                 | Todos, si está activo | Sólo propios, si está activo |
+| Artículos: eliminar               | Sí                    | No                           |
 
 Un editor nunca puede eliminar artículos, incluso si es el autor. Un usuario que conserva un token luego de ser desactivado puede consultar lo que su rol permite, pero recibe `403 Forbidden` al intentar crear o editar artículos.
 
@@ -154,45 +154,47 @@ Un editor nunca puede eliminar artículos, incluso si es el autor. Un usuario qu
 
 Todos los endpoints CRUD requieren `Authorization: Bearer <TOKEN>`. Las colecciones usan paginación nativa de Laravel, con 15 elementos por defecto. `per_page` permite solicitar entre 1 y 100 elementos.
 
+`PUT` y `PATCH` comparten validación de actualización parcial: sólo se modifican los campos presentes en el request.
+
 ### Authentication
 
-| Método | Ruta | Permiso | Códigos principales |
-| --- | --- | --- | --- |
-| `POST` | `/api/v1/auth/login` | Público; sólo usuarios activos obtienen token | `200`, `401`, `403`, `422` |
-| `GET` | `/api/v1/auth/me` | Usuario autenticado | `200`, `401` |
-| `POST` | `/api/v1/auth/logout` | Usuario autenticado | `204`, `401` |
+| Método | Ruta                  | Permiso                                       | Códigos principales        |
+| ------ | --------------------- | --------------------------------------------- | -------------------------- |
+| `POST` | `/api/v1/auth/login`  | Público; sólo usuarios activos obtienen token | `200`, `401`, `403`, `422` |
+| `GET`  | `/api/v1/auth/me`     | Usuario autenticado                           | `200`, `401`               |
+| `POST` | `/api/v1/auth/logout` | Usuario autenticado                           | `204`, `401`               |
 
 ### Users
 
-| Método | Ruta | Permiso | Códigos principales |
-| --- | --- | --- | --- |
-| `GET` | `/api/v1/users` | Admin | `200`, `401`, `403` |
-| `POST` | `/api/v1/users` | Admin | `201`, `401`, `403`, `422` |
-| `GET` | `/api/v1/users/{user}` | Admin | `200`, `401`, `403`, `404` |
-| `PUT/PATCH` | `/api/v1/users/{user}` | Admin | `200`, `401`, `403`, `404`, `422` |
-| `DELETE` | `/api/v1/users/{user}` | Admin | `204`, `401`, `403`, `404`, `409` |
+| Método      | Ruta                   | Permiso | Códigos principales               |
+| ----------- | ---------------------- | ------- | --------------------------------- |
+| `GET`       | `/api/v1/users`        | Admin   | `200`, `401`, `403`               |
+| `POST`      | `/api/v1/users`        | Admin   | `201`, `401`, `403`, `422`        |
+| `GET`       | `/api/v1/users/{user}` | Admin   | `200`, `401`, `403`, `404`        |
+| `PUT/PATCH` | `/api/v1/users/{user}` | Admin   | `200`, `401`, `403`, `404`, `422` |
+| `DELETE`    | `/api/v1/users/{user}` | Admin   | `204`, `401`, `403`, `404`, `409` |
 
 Un usuario con artículos no puede eliminarse. La API responde `409 Conflict`; si puede eliminarse, sus tokens Sanctum también se eliminan.
 
 ### Categories
 
-| Método | Ruta | Permiso | Códigos principales |
-| --- | --- | --- | --- |
-| `GET` | `/api/v1/categories` | Admin o editor | `200`, `401` |
-| `POST` | `/api/v1/categories` | Admin | `201`, `401`, `403`, `422` |
-| `GET` | `/api/v1/categories/{category}` | Admin o editor | `200`, `401`, `404` |
-| `PUT/PATCH` | `/api/v1/categories/{category}` | Admin | `200`, `401`, `403`, `404`, `422` |
-| `DELETE` | `/api/v1/categories/{category}` | Admin y sin artículos asociados | `204`, `401`, `403`, `404`, `409` |
+| Método      | Ruta                            | Permiso                         | Códigos principales               |
+| ----------- | ------------------------------- | ------------------------------- | --------------------------------- |
+| `GET`       | `/api/v1/categories`            | Admin o editor                  | `200`, `401`                      |
+| `POST`      | `/api/v1/categories`            | Admin                           | `201`, `401`, `403`, `422`        |
+| `GET`       | `/api/v1/categories/{category}` | Admin o editor                  | `200`, `401`, `404`               |
+| `PUT/PATCH` | `/api/v1/categories/{category}` | Admin                           | `200`, `401`, `403`, `404`, `422` |
+| `DELETE`    | `/api/v1/categories/{category}` | Admin y sin artículos asociados | `204`, `401`, `403`, `404`, `409` |
 
 ### Articles
 
-| Método | Ruta | Permiso | Códigos principales |
-| --- | --- | --- | --- |
-| `GET` | `/api/v1/articles` | Admin: todos; editor: sólo propios | `200`, `401` |
-| `POST` | `/api/v1/articles` | Admin o editor activo | `201`, `401`, `403`, `422` |
-| `GET` | `/api/v1/articles/{article}` | Admin o editor autor | `200`, `401`, `403`, `404` |
+| Método      | Ruta                         | Permiso                            | Códigos principales               |
+| ----------- | ---------------------------- | ---------------------------------- | --------------------------------- |
+| `GET`       | `/api/v1/articles`           | Admin: todos; editor: sólo propios | `200`, `401`                      |
+| `POST`      | `/api/v1/articles`           | Admin o editor activo              | `201`, `401`, `403`, `422`        |
+| `GET`       | `/api/v1/articles/{article}` | Admin o editor autor               | `200`, `401`, `403`, `404`        |
 | `PUT/PATCH` | `/api/v1/articles/{article}` | Admin activo o editor activo autor | `200`, `401`, `403`, `404`, `422` |
-| `DELETE` | `/api/v1/articles/{article}` | Admin | `204`, `401`, `403`, `404` |
+| `DELETE`    | `/api/v1/articles/{article}` | Admin                              | `204`, `401`, `403`, `404`        |
 
 Los campos `author_id` y `slug` no forman parte del input admitido. `category_ids` es obligatorio al crear y, cuando se envía al editar, debe contener al menos un ID único y existente.
 
