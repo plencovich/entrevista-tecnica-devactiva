@@ -198,6 +198,18 @@ Un usuario con artículos no puede eliminarse. La API responde `409 Conflict`; s
 
 Los campos `author_id` y `slug` no forman parte del input admitido. `category_ids` es obligatorio al crear y, cuando se envía al editar, debe contener al menos un ID único y existente.
 
+## Postman
+
+La colección importable está disponible en [`postman/CMS-Modular-API.postman_collection.json`](postman/CMS-Modular-API.postman_collection.json). Incluye todos los endpoints, payloads de ejemplo, Bearer Token heredado, tests básicos y variables que guardan automáticamente el token y los IDs creados.
+
+Para usarla:
+
+1. Levantar la API y ejecutar las migrations con el seeder.
+2. En Postman, seleccionar **Import** y elegir el archivo de la colección.
+3. Ejecutar `01 - Autenticación / Login`; el token queda disponible para los demás requests.
+
+No requiere importar un environment: `base_url`, credenciales locales, token, paginación e IDs están definidos como variables de la colección. El valor inicial de `base_url` es `http://localhost:8000`. La colección también puede ejecutarse completa con Collection Runner en el orden provisto; crea recursos temporales, los elimina y finalmente revoca el token.
+
 ## Ejemplos curl
 
 ### Crear una categoría como admin

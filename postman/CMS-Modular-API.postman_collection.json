@@ -1,0 +1,1104 @@
+{
+    "info": {
+        "_postman_id": "e0dd6f31-0ab9-4ba2-8c12-93260ab272c3",
+        "name": "CMS Modular API",
+        "description": "Colección completa para consumir la API REST del CMS Modular.\n\nRequisitos locales:\n1. Levantar el proyecto en `http://localhost:8000`.\n2. Ejecutar las migrations y el seeder.\n3. El seeder provee `admin@example.com` / `password`.\n\nLa colección usa variables propias: no requiere importar un environment. El login guarda automáticamente el Bearer Token y las creaciones guardan los IDs necesarios para los requests siguientes. Puede ejecutarse completa en el orden definido; los recursos temporales se eliminan antes del logout.",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "auth": {
+        "type": "bearer",
+        "bearer": [
+            {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "string"
+            }
+        ]
+    },
+    "event": [
+        {
+            "listen": "prerequest",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    "pm.request.headers.upsert({ key: 'Accept', value: 'application/json' });"
+                ]
+            }
+        }
+    ],
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:8000",
+            "type": "string"
+        },
+        {
+            "key": "login_email",
+            "value": "admin@example.com",
+            "type": "string"
+        },
+        {
+            "key": "login_password",
+            "value": "password",
+            "type": "string"
+        },
+        {
+            "key": "token",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "authenticated_user_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "user_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "category_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "article_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "per_page",
+            "value": "15",
+            "type": "string"
+        }
+    ],
+    "item": [
+        {
+            "name": "00 - Healthcheck",
+            "item": [
+                {
+                    "name": "Comprobar estado de la API",
+                    "request": {
+                        "auth": {
+                            "type": "noauth"
+                        },
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/up",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "up"
+                            ]
+                        },
+                        "description": "Healthcheck técnico público. Responde `200` con `{\"status\":\"ok\"}`."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 200 OK', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test('La API informa estado ok', function () {",
+                                    "    pm.expect(pm.response.json()).to.deep.equal({ status: 'ok' });",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "01 - Autenticación",
+            "description": "Inicia la sesión Sanctum y consulta al usuario autenticado. El logout se encuentra al final de la colección para permitir la ejecución completa en Collection Runner.",
+            "item": [
+                {
+                    "name": "Login",
+                    "request": {
+                        "auth": {
+                            "type": "noauth"
+                        },
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"{{login_email}}\",\n    \"password\": \"{{login_password}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/auth/login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "auth",
+                                "login"
+                            ]
+                        },
+                        "description": "Autentica un usuario activo. Responde `200`; credenciales inválidas, `401`; usuario inactivo, `403`; payload inválido, `422`. Guarda automáticamente `token` y `authenticated_user_id`."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 200 OK', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "if (pm.response.code === 200) {",
+                                    "    const response = pm.response.json();",
+                                    "    pm.collectionVariables.set('token', response.token);",
+                                    "    pm.collectionVariables.set('authenticated_user_id', String(response.user.id));",
+                                    "    pm.test('Devuelve un Bearer Token y el usuario', function () {",
+                                    "        pm.expect(response.token).to.be.a('string').and.not.empty;",
+                                    "        pm.expect(response.token_type).to.equal('Bearer');",
+                                    "        pm.expect(response.user).to.have.property('email', pm.variables.get('login_email'));",
+                                    "    });",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Obtener usuario autenticado",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/auth/me",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "auth",
+                                "me"
+                            ]
+                        },
+                        "description": "Devuelve los datos públicos del usuario asociado al token actual. Requiere autenticación y responde `200` o `401`."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 200 OK', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test('No expone campos sensibles', function () {",
+                                    "    const data = pm.response.json().data;",
+                                    "    pm.expect(data).to.not.have.property('password');",
+                                    "    pm.expect(data).to.not.have.property('remember_token');",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "02 - Usuarios",
+            "description": "CRUD administrativo de usuarios. Todos estos endpoints requieren rol `admin`.",
+            "item": [
+                {
+                    "name": "Listar usuarios",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/users?per_page={{per_page}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "users"
+                            ],
+                            "query": [
+                                {
+                                    "key": "per_page",
+                                    "value": "{{per_page}}",
+                                    "description": "Cantidad por página, entre 1 y 100."
+                                }
+                            ]
+                        },
+                        "description": "Lista usuarios con paginación nativa de Laravel. Responde `200`, `401` o `403`."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 200 con una colección paginada', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "    const response = pm.response.json();",
+                                    "    pm.expect(response.data).to.be.an('array');",
+                                    "    pm.expect(response).to.have.all.keys('data', 'links', 'meta');",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Crear usuario",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"Editor Postman\",\n    \"email\": \"editor-{{$randomUUID}}@example.com\",\n    \"password\": \"password\",\n    \"role\": \"editor\",\n    \"status\": \"active\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/users",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "users"
+                            ]
+                        },
+                        "description": "Crea un usuario. `role`: `admin|editor`; `status`: `active|inactive`; password mínimo de 8 caracteres. Responde `201`, `401`, `403` o `422`. Guarda el ID creado en `user_id`."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 201 Created', function () {",
+                                    "    pm.response.to.have.status(201);",
+                                    "});",
+                                    "if (pm.response.code === 201) {",
+                                    "    const data = pm.response.json().data;",
+                                    "    pm.collectionVariables.set('user_id', String(data.id));",
+                                    "    pm.test('No expone el password', function () {",
+                                    "        pm.expect(data).to.not.have.property('password');",
+                                    "    });",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Obtener usuario",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/users/{{user_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "users",
+                                "{{user_id}}"
+                            ]
+                        },
+                        "description": "Obtiene un usuario por ID. Responde `200`, `401`, `403` o `404`."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 200 con el usuario solicitado', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "    pm.expect(String(pm.response.json().data.id)).to.equal(pm.variables.get('user_id'));",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Reemplazar parcialmente usuario (PUT)",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"Editor actualizado con PUT\",\n    \"role\": \"editor\",\n    \"status\": \"active\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/users/{{user_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "users",
+                                "{{user_id}}"
+                            ]
+                        },
+                        "description": "Actualiza mediante `PUT`. En este proyecto, `PUT` y `PATCH` aceptan actualización parcial. Responde `200`, `401`, `403`, `404` o `422`."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 200 y actualiza el nombre', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "    pm.expect(pm.response.json().data.name).to.equal('Editor actualizado con PUT');",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Actualizar usuario (PATCH)",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"Editor actualizado con PATCH\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/users/{{user_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "users",
+                                "{{user_id}}"
+                            ]
+                        },
+                        "description": "Actualiza sólo los campos enviados. Responde `200`, `401`, `403`, `404` o `422`."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 200 y actualiza el nombre', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "    pm.expect(pm.response.json().data.name).to.equal('Editor actualizado con PATCH');",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Eliminar usuario",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/users/{{user_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "users",
+                                "{{user_id}}"
+                            ]
+                        },
+                        "description": "Elimina un usuario sin artículos y revoca sus tokens. Responde `204`, `401`, `403`, `404` o `409` si es autor de artículos."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 204 No Content', function () {",
+                                    "    pm.response.to.have.status(204);",
+                                    "});",
+                                    "if (pm.response.code === 204) {",
+                                    "    pm.collectionVariables.unset('user_id');",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "03 - Categorías",
+            "description": "Consulta y administración de categorías. Admin y editor pueden listar/ver; sólo admin puede crear/actualizar/eliminar. La eliminación se ejecuta en la carpeta de limpieza, después de probar artículos.",
+            "item": [
+                {
+                    "name": "Listar categorías",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/categories?per_page={{per_page}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "categories"
+                            ],
+                            "query": [
+                                {
+                                    "key": "per_page",
+                                    "value": "{{per_page}}",
+                                    "description": "Cantidad por página, entre 1 y 100."
+                                }
+                            ]
+                        },
+                        "description": "Lista categorías con paginación. Responde `200` o `401`."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 200 con una colección paginada', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "    const response = pm.response.json();",
+                                    "    pm.expect(response.data).to.be.an('array');",
+                                    "    pm.expect(response).to.have.all.keys('data', 'links', 'meta');",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Crear categoría",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"Categoría Postman {{$randomInt}}\",\n    \"description\": \"Categoría temporal creada desde Postman.\",\n    \"status\": \"active\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/categories",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "categories"
+                            ]
+                        },
+                        "description": "Crea una categoría. `status`: `active|inactive`. Responde `201`, `401`, `403` o `422`. Guarda el ID creado en `category_id`."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 201 Created', function () {",
+                                    "    pm.response.to.have.status(201);",
+                                    "});",
+                                    "if (pm.response.code === 201) {",
+                                    "    pm.collectionVariables.set('category_id', String(pm.response.json().data.id));",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Obtener categoría",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/categories/{{category_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "categories",
+                                "{{category_id}}"
+                            ]
+                        },
+                        "description": "Obtiene una categoría por ID. Responde `200`, `401` o `404`."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 200 con la categoría solicitada', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "    pm.expect(String(pm.response.json().data.id)).to.equal(pm.variables.get('category_id'));",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Reemplazar parcialmente categoría (PUT)",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"Categoría actualizada con PUT\",\n    \"description\": \"Descripción actualizada mediante PUT.\",\n    \"status\": \"active\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/categories/{{category_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "categories",
+                                "{{category_id}}"
+                            ]
+                        },
+                        "description": "Actualiza mediante `PUT`. En este proyecto, `PUT` y `PATCH` aceptan actualización parcial. Responde `200`, `401`, `403`, `404` o `422`."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 200 y actualiza el nombre', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "    pm.expect(pm.response.json().data.name).to.equal('Categoría actualizada con PUT');",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Actualizar categoría (PATCH)",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"description\": \"Descripción actualizada mediante PATCH.\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/categories/{{category_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "categories",
+                                "{{category_id}}"
+                            ]
+                        },
+                        "description": "Actualiza sólo los campos enviados. Responde `200`, `401`, `403`, `404` o `422`."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 200 y actualiza la descripción', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "    pm.expect(pm.response.json().data.description).to.equal('Descripción actualizada mediante PATCH.');",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "04 - Artículos",
+            "description": "CRUD de artículos. El autor y el slug se asignan internamente; no se aceptan en el payload. Todo artículo nuevo requiere al menos una categoría existente.",
+            "item": [
+                {
+                    "name": "Listar artículos",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/articles?per_page={{per_page}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "articles"
+                            ],
+                            "query": [
+                                {
+                                    "key": "per_page",
+                                    "value": "{{per_page}}",
+                                    "description": "Cantidad por página, entre 1 y 100."
+                                }
+                            ]
+                        },
+                        "description": "Lista artículos con autor y categorías. Admin ve todos; editor, sólo los propios. Responde `200` o `401`."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 200 con una colección paginada', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "    const response = pm.response.json();",
+                                    "    pm.expect(response.data).to.be.an('array');",
+                                    "    pm.expect(response).to.have.all.keys('data', 'links', 'meta');",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Crear artículo",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"title\": \"Artículo Postman {{$randomUUID}}\",\n    \"content\": \"Contenido temporal creado desde la colección Postman.\",\n    \"status\": \"draft\",\n    \"published_at\": null,\n    \"category_ids\": [\n        {{category_id}}\n    ]\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/articles",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "articles"
+                            ]
+                        },
+                        "description": "Crea un artículo del usuario autenticado. `status`: `draft|published`; `category_ids` requiere uno o más IDs únicos existentes. Responde `201`, `401`, `403` o `422`. Guarda el ID en `article_id`."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 201 Created', function () {",
+                                    "    pm.response.to.have.status(201);",
+                                    "});",
+                                    "if (pm.response.code === 201) {",
+                                    "    const data = pm.response.json().data;",
+                                    "    pm.collectionVariables.set('article_id', String(data.id));",
+                                    "    pm.test('Asigna autor, slug y categoría', function () {",
+                                    "        pm.expect(data.slug).to.be.a('string').and.not.empty;",
+                                    "        pm.expect(data.author).to.be.an('object');",
+                                    "        pm.expect(data.categories).to.be.an('array').with.lengthOf(1);",
+                                    "    });",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Obtener artículo",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/articles/{{article_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "articles",
+                                "{{article_id}}"
+                            ]
+                        },
+                        "description": "Obtiene un artículo con autor y categorías. Admin puede ver cualquiera; editor, sólo uno propio. Responde `200`, `401`, `403` o `404`."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 200 con el artículo solicitado', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "    pm.expect(String(pm.response.json().data.id)).to.equal(pm.variables.get('article_id'));",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Reemplazar parcialmente artículo (PUT)",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"title\": \"Artículo actualizado con PUT\",\n    \"content\": \"Contenido actualizado mediante PUT.\",\n    \"status\": \"draft\",\n    \"category_ids\": [\n        {{category_id}}\n    ]\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/articles/{{article_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "articles",
+                                "{{article_id}}"
+                            ]
+                        },
+                        "description": "Actualiza mediante `PUT`. En este proyecto, `PUT` y `PATCH` aceptan actualización parcial. El slug se regenera si cambia el título. Responde `200`, `401`, `403`, `404` o `422`."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 200 y actualiza el título', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "    pm.expect(pm.response.json().data.title).to.equal('Artículo actualizado con PUT');",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Actualizar artículo (PATCH)",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"status\": \"published\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/articles/{{article_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "articles",
+                                "{{article_id}}"
+                            ]
+                        },
+                        "description": "Publica el artículo. Si no se envía `published_at`, el observer asigna la fecha actual. Responde `200`, `401`, `403`, `404` o `422`."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 200 y publica el artículo', function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "    const data = pm.response.json().data;",
+                                    "    pm.expect(data.status).to.equal('published');",
+                                    "    pm.expect(data.published_at).to.not.equal(null);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Eliminar artículo",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/articles/{{article_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "articles",
+                                "{{article_id}}"
+                            ]
+                        },
+                        "description": "Elimina un artículo. Sólo un admin puede hacerlo; un editor nunca puede eliminar artículos. Responde `204`, `401`, `403` o `404`."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 204 No Content', function () {",
+                                    "    pm.response.to.have.status(204);",
+                                    "});",
+                                    "if (pm.response.code === 204) {",
+                                    "    pm.collectionVariables.unset('article_id');",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "05 - Limpieza",
+            "description": "Elimina la categoría temporal después de borrar el artículo asociado, respetando la restricción de integridad de la API.",
+            "item": [
+                {
+                    "name": "Eliminar categoría",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/categories/{{category_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "categories",
+                                "{{category_id}}"
+                            ]
+                        },
+                        "description": "Elimina una categoría sin artículos asociados. Responde `204`, `401`, `403`, `404` o `409` si está en uso."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 204 No Content', function () {",
+                                    "    pm.response.to.have.status(204);",
+                                    "});",
+                                    "if (pm.response.code === 204) {",
+                                    "    pm.collectionVariables.unset('category_id');",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "06 - Cierre de sesión",
+            "description": "Revoca el token utilizado. Debe ejecutarse al final si se usa Collection Runner.",
+            "item": [
+                {
+                    "name": "Logout",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/auth/logout",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "auth",
+                                "logout"
+                            ]
+                        },
+                        "description": "Revoca exclusivamente el Bearer Token usado en la petición. Responde `204` o `401`. Limpia la variable `token`."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test('Responde 204 No Content', function () {",
+                                    "    pm.response.to.have.status(204);",
+                                    "});",
+                                    "if (pm.response.code === 204) {",
+                                    "    pm.collectionVariables.unset('token');",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
